@@ -298,6 +298,8 @@ class ComicPage:
                 gamma = 1.0
         if gamma == 1.0:
             self.image = ImageOps.autocontrast(self.image)
+        elif gamma == 2.0:
+            self.image = ImageOps.autocontrast(ImageChops.multiply(self.image, self.image))
         else:
             self.image = ImageOps.autocontrast(Image.eval(self.image, lambda a: int(255 * (a / 255.) ** gamma)))
 
