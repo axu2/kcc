@@ -88,7 +88,7 @@ jobs:
           files: |
             CHANGELOG.md
             LICENSE.txt
-            dist/*.dmg
+            dist/*.app
       - name: Clean up keychain and provisioning profile
 #        TODO signing
         if: ${{ false }}
