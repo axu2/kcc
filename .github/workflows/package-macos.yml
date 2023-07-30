@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
   push:
     tags:
-      - "v*.*.*"
+      - "v*.*.*" f
 
     # Don't trigger if it's just a documentation update
     paths-ignore:
@@ -78,7 +78,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: mac-os-build
-          path: dist/*.dmg
+          path: dist/*.app
       - name: Release
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
