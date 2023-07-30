@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
   push:
     tags:
-      - "v*.*.*" f
+      - "v*.*.*"
 
     # Don't trigger if it's just a documentation update
     paths-ignore:
