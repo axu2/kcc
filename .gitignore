@@ -11,3 +11,5 @@ KindleComicConverter*.egg-info/
 /venv/
 /kindlegen*
 /kcc.bat
+mozjpeg_lossless_optimization-*.whl
+.DS_Store
