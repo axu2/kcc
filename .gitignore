@@ -13,3 +13,4 @@ KindleComicConverter*.egg-info/
 /kcc.bat
 mozjpeg_lossless_optimization-*.whl
 .DS_Store
+Kindle Comic Converter.spec

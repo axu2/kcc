@@ -46,7 +46,7 @@ class BuildBinaryCommand(distutils.cmd.Command):
             with open(OSX_INFO_PLIST, 'w') as file:
                 file.write(filedata)
 
-            os.system('pyinstaller -y -F -i icons/comic2ebook.icns -n "Kindle Comic Converter" -w -s kcc.py')
+            os.system('pyinstaller --target-arch universal2 -y -F -i icons/comic2ebook.icns -n "Kindle Comic Converter" -w -s kcc.py')
             os.makedirs('dist/Kindle Comic Converter.app/Contents/Resources/Codecs')
             shutil.copy('other/osx/7z', 'dist/Kindle Comic Converter.app/Contents/Resources')
             shutil.copy('other/osx/7z.so', 'dist/Kindle Comic Converter.app/Contents/Resources')
