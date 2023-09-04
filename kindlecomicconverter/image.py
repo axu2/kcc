@@ -29,7 +29,7 @@ from .shared import md5Checksum
 # 2250 / 1500 = 1.5 (Typical manga page resolution)
 # 1.5 - 1.456 < 0.045
 # 0.045 / 1.5 = 0.03 (So maximum 3% of is cropped)
-AUTO_CROP_THRESHOLD = 0.045
+AUTO_CROP_THRESHOLD = 0.0
 
 
 class ProfileData:
