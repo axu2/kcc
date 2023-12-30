@@ -920,7 +920,7 @@ class KCCGUI(KCC_ui.Ui_mainWindow):
             "Kindle Scribe": {
                 'PVOptions': True, 'ForceExpert': False, 'DefaultFormat': 0, 'DefaultUpscale': False, 'Label': 'KS',
             },
-            "Kindle 11": {
+            "Kindle Basic 11": {
                 'PVOptions': True, 'ForceExpert': False, 'DefaultFormat': 0, 'DefaultUpscale': True, 'Label': 'K11',
             },
             "Kindle PW 5": {
@@ -978,7 +978,7 @@ class KCCGUI(KCC_ui.Ui_mainWindow):
         profilesGUI = [
             "Kindle Oasis 2/3",
             "Kindle PW 5",
-            "Kindle 11",
+            "Kindle Basic 11",
             "Kindle Scribe",
             "Separator",
             "Kobo Clara 2E",
