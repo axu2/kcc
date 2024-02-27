@@ -21,7 +21,6 @@
 import os
 import pathlib
 import re
-import subprocess
 import sys
 from argparse import ArgumentParser
 from time import strftime, gmtime
@@ -35,7 +34,6 @@ from shutil import move, copytree, rmtree, copyfile
 from multiprocessing import Pool
 from uuid import uuid4
 from natsort import os_sorted
-from slugify import slugify as slugify_ext
 from PIL import Image
 from subprocess import STDOUT, PIPE
 from psutil import virtual_memory, disk_usage
@@ -774,12 +772,9 @@ def sanitizeTree(filetree):
             key = os.path.join(root, name)
             if key != newKey:
                 os.replace(key, newKey)
-        for name in dirs:
-            tmpName = name
-            slugified = slugify(name)
-            while os.path.exists(os.path.join(root, slugified)) and name.upper() != slugified.upper():
-                slugified += "A"
-            chapterNames[slugified] = tmpName
+        for i, name in enumerate(os_sorted(dirs)):
+            slugified = f'kcc-{i:04}-kcc'
+            chapterNames[slugified] = name
             newKey = os.path.join(root, slugified)
             key = os.path.join(root, name)
             if key != newKey:
@@ -907,12 +902,6 @@ def createNewTome():
     tomePath = os.path.join(tomePathRoot, 'OEBPS', 'Images')
     os.makedirs(tomePath)
     return tomePath, tomePathRoot
-
-
-def slugify(value):
-    value = slugify_ext(value, regex_pattern=r'[^-a-z0-9_\.]+').strip('.')
-    value = sub(r'0*([0-9]{4,})', r'\1', sub(r'([0-9]+)', r'0000\1', value, count=2))
-    return value
 
 
 def makeZIP(zipfilename, basedir, isepub=False):

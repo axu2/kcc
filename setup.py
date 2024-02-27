@@ -78,7 +78,6 @@ setuptools.setup(
         'pyside6>=6.5.1',
         'Pillow>=5.2.0',
         'psutil>=5.9.5',
-        'python-slugify>=1.2.1,<9.0.0',
         'raven>=6.0.0',
         'requests>=2.31.0',
         'mozjpeg-lossless-optimization>=1.1.2',
