@@ -656,27 +656,30 @@ def getWorkFolder(afile):
                 cbx = comicarchive.ComicArchive(afile)
                 path = cbx.extract(workdir)
                 sanitizePermissions(path)
-                tdir = os.listdir(workdir)
-                is_nested_single_dir = False
-                if len(tdir) == 2 and 'ComicInfo.xml' in tdir:
-                    tdir.remove('ComicInfo.xml')
-                    is_nested_single_dir = os.path.isdir(os.path.join(workdir, tdir[0]))
-                    if is_nested_single_dir:
-                        os.replace(
-                            os.path.join(workdir, 'ComicInfo.xml'),
-                            os.path.join(workdir, tdir[0], 'ComicInfo.xml')
-                        )
-                if len(tdir) == 1 and is_nested_single_dir:
-                    path = os.path.join(workdir, tdir[0])           
+                path = remove_nested_single_dir(workdir)
             except OSError as e:
                 rmtree(workdir, True)
                 raise UserWarning(e)
     else:
         raise UserWarning("Failed to open source file/directory.")
     newpath = mkdtemp('', 'KCC-', os.path.dirname(afile))
-    copytree(path, os.path.join(newpath, 'OEBPS', 'Images'))
-    rmtree(workdir, True)
+    os.renames(path, os.path.join(newpath, 'OEBPS', 'Images'))
     return newpath
+
+def remove_nested_single_dir(workdir):
+    tdir = os.listdir(workdir)
+    is_nested_single_dir = False
+    if len(tdir) == 2 and 'ComicInfo.xml' in tdir:
+        tdir.remove('ComicInfo.xml')
+        is_nested_single_dir = os.path.isdir(os.path.join(workdir, tdir[0]))
+        if is_nested_single_dir:
+            os.replace(
+                os.path.join(workdir, 'ComicInfo.xml'),
+                os.path.join(workdir, tdir[0], 'ComicInfo.xml')
+            )
+    if len(tdir) == 1 and is_nested_single_dir:
+        return os.path.join(workdir, tdir[0])
+    return workdir
 
 
 def getOutputFilename(srcpath, wantedname, ext, tomenumber):

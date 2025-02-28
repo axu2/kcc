@@ -76,6 +76,9 @@ class ComicArchive:
                 ['unar', self.filepath, '-f', '-o', targetdir]
             )
 
+        # sometimes tar can leave files in a weird state due to unimplemented features, so it should be last priority
+        extraction_commands.reverse()
+
         if distro.id() == 'fedora' or distro.like() == 'fedora':
             extraction_commands.append(
                 ['unrar', 'x', '-y', '-x__MACOSX', '-x.DS_Store', '-xthumbs.db', '-xThumbs.db', self.filepath, targetdir]
