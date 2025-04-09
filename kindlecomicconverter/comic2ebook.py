@@ -1310,10 +1310,14 @@ def makeMOBIFix(item, uuid):
     is_pdoc = options.profile in image.ProfileData.ProfilesKindlePDOC.keys()
     if not options.keep_epub:
         os.remove(item)
+
+    start = perf_counter()
     mobiPath = item.replace('.epub', '.mobi')
     move(mobiPath, mobiPath + '_toclean')
     try:
         dualmetafix.DualMobiMetaFix(mobiPath + '_toclean', mobiPath, bytes(uuid, 'UTF-8'), is_pdoc)
+        end = perf_counter()
+        print(f"dualmetafix: {end - start} sec")
         return [True]
     except Exception as err:
         return [False, format(err)]
@@ -1361,6 +1365,7 @@ def makeMOBIWorker(item):
 
 
 def makeMOBI(work, qtgui=None):
+    start = perf_counter()
     global GUI, makeMOBIWorkerPool, makeMOBIWorkerOutput
     GUI = qtgui
     makeMOBIWorkerOutput = []
@@ -1378,4 +1383,6 @@ def makeMOBI(work, qtgui=None):
         makeMOBIWorkerPool.apply_async(func=makeMOBIWorker, args=(i, ), callback=makeMOBIWorkerTick)
     makeMOBIWorkerPool.close()
     makeMOBIWorkerPool.join()
+    end = perf_counter()
+    print(f"makeMOBI: {end - start} sec")
     return makeMOBIWorkerOutput
