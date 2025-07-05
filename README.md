@@ -27,7 +27,7 @@ on underpowered ereaders with small storage capacities.
 KCC avoids many common formatting issues (some of which occur [even on the Kindle Store](https://github.com/ciromattia/kcc/wiki/Kindle-Store-bad-formatting)), such as:
 1) faded black levels causing unneccessarily low contrast, which is hard to see and can cause eyestrain.
 2) unneccessary margins at the bottom of the screen
-3) Not utilizing the full 1860x2480 resolution of the 10" Kindle Scribe (feature in progress)
+3) Not utilizing the full 1860x2480 resolution of the 10" Kindle Scribe
 4) incorrect page turn direction for manga that's read right to left
 5) unaligned two page spreads in landscape, where pages are shifted over by 1
 
@@ -101,6 +101,8 @@ For flatpak, Docker, and AppImage versions, refer to the wiki: https://github.co
 ## FAQ
 - All options have additional information in tooltips if you hover over the option.
 - To get the converted book onto your Kindle/Kobo, just drag and drop the mobi/kepub into the documents folder on your Kindle/Kobo via USB
+- Colors inverted?
+  - Disable Kindle dark mode
 - Cannot connect Kindle Scribe or 2024+ Kindle to macOS
   - Use official MTP [Amazon USB File Transfer app](https://www.amazon.com/gp/help/customer/display.html/ref=hp_Connect_USB_MTP?nodeId=TCUBEdEkbIhK07ysFu)
     (no login required). Works much better than previously recommended Android File Transfer. Cannot run simutaneously with other transfer apps.
@@ -252,6 +254,7 @@ OUTPUT SETTINGS:
                         Split output into multiple files. 0: Don't split 1: Automatic mode 2: Consider every subdirectory as separate volume [Default=0]
   --spreadshift         Shift first page to opposite side in landscape for two page spread alignment
   --norotate            Do not rotate double page spreads in spread splitter option.
+  --rotatefirst         Put rotated spread first in spread splitter option.
   --reducerainbow       Reduce rainbow effect on color eink by slightly blurring images
 
 CUSTOM PROFILE:
@@ -298,6 +301,8 @@ If you want to edit the `.ui` files, use `pyside6-designer` which is included in
 Then use the `gen_ui_files` scripts to autogenerate the python UI.
 
 An example PR adding a new checkbox is here: https://github.com/ciromattia/kcc/pull/785
+
+video of adding a new checkbox: https://youtu.be/g3I8DU74C7g
 
 Do not use `git merge` to merge master from upstream, 
 use the "Sync fork" button on your fork on GitHub in your branch 

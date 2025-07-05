@@ -34,7 +34,7 @@ from tempfile import mkdtemp, gettempdir, TemporaryFile
 from shutil import move, copytree, rmtree, copyfile
 from multiprocessing import Pool, cpu_count
 from uuid import uuid4
-from natsort import os_sort_keygen
+from natsort import os_sort_keygen, os_sorted
 from slugify import slugify as slugify_ext
 from PIL import Image, ImageFile
 from pathlib import Path
@@ -44,7 +44,8 @@ from html import escape as hescape
 import pymupdf
 import numpy as np
 
-from .shared import available_archive_tools, getImageFileName, walkSort, walkLevel, sanitizeTrace, subprocess_run
+from .shared import getImageFileName, walkSort, walkLevel, sanitizeTrace, subprocess_run
+from .comicarchive import SEVENZIP, available_archive_tools
 from . import comic2panel
 from . import image
 from . import comicarchive
@@ -337,6 +338,8 @@ def buildOPF(dstdir, title, filelist, cover=None):
                 ".xhtml\" media-type=\"application/xhtml+xml\"/>\n")
         if '.png' == filename[1]:
             mt = 'image/png'
+        elif '.gif' == filename[1]:
+            mt = 'image/gif'
         else:
             mt = 'image/jpeg'
         f.write("<item id=\"img_" + str(uniqueid) + "\" href=\"" + folder + "/" + path[1] + "\" media-type=\"" +
@@ -449,10 +452,13 @@ def buildEPUB(path, chapternames, tomenumber, ischunked, cover: image.Cover, len
                   "margin: 0;\n",
                   "padding: 0;\n",
                   "}\n",
-                  "img {\n",
-                  "display: block;\n",
-                  "}\n",
                   ])
+    if options.kindle_scribe_azw3:
+        f.writelines([
+                    "img {\n",
+                    "display: block;\n",
+                    "}\n",
+                    ])
     if options.iskindle and options.panelview:
         f.writelines(["#PV {\n",
                       "position: absolute;\n",
@@ -643,8 +649,12 @@ def imgFileProcessing(work):
             img.autocontrastImage()
             img.resizeImage()
             img.optimizeForDisplay(opt.reducerainbow)
-            if not opt.forcecolor or (opt.forcecolor and not workImg.color):
-                img.convertToGrayscaleOrQuantize()
+            if opt.forcecolor and img.color:
+                pass
+            elif opt.forcepng:
+                img.quantizeImage()
+            else:
+                img.convertToGrayscale()
             output.append(img.saveToDir())
         return output
     except Exception:
@@ -763,16 +773,6 @@ def getWorkFolder(afile):
                 cbx = comicarchive.ComicArchive(afile)
                 path = cbx.extract(workdir)
                 sanitizePermissions(path)
-                tdir = os.listdir(workdir)
-                if len(tdir) == 2 and 'ComicInfo.xml' in tdir:
-                    tdir.remove('ComicInfo.xml')
-                    if os.path.isdir(os.path.join(workdir, tdir[0])):
-                        os.replace(
-                            os.path.join(workdir, 'ComicInfo.xml'),
-                            os.path.join(workdir, tdir[0], 'ComicInfo.xml')
-                        )
-                if len(tdir) == 1 and os.path.isdir(os.path.join(workdir, tdir[0])):
-                    path = os.path.join(workdir, tdir[0])           
             except OSError as e:
                 rmtree(workdir, True)
                 raise UserWarning(e)
@@ -895,29 +895,48 @@ def getPanelViewSize(deviceres, size):
     return str(int(x)), str(int(y))
 
 
+def removeNonImages(filetree):
+    # clean dot from original file
+    dot_clean(filetree)
+
+    for root, dirs, files in os.walk(filetree):
+        for name in files:
+            _, ext = getImageFileName(name)
+            if ext not in ('.png', '.jpg', '.jpeg', '.gif', '.webp', '.jp2'):
+                if os.path.exists(os.path.join(root, name)):
+                    os.remove(os.path.join(root, name))
+    # remove empty nested folders
+    for root, dirs, files in os.walk(filetree, False):
+        if not files and not dirs:
+            os.rmdir(root)
+
+
 def sanitizeTree(filetree):
     chapterNames = {}
     page = 1
     cover_path = None
     for root, dirs, files in os.walk(filetree):
-        dirs.sort(key=OS_SORT_KEY)
         files.sort(key=OS_SORT_KEY)
         for name in files:
-            splitname = os.path.splitext(name)
+            _, ext = getImageFileName(name)
 
             # 9999 page limit
-            slugified = f'kcc-{page:04}'
+            unique_name = f'kcc-{page:04}'
             page += 1
 
-            newKey = os.path.join(root, slugified + splitname[1])
+            newKey = os.path.join(root, unique_name + ext)
             key = os.path.join(root, name)
             if key != newKey:
                 os.replace(key, newKey)
             if not cover_path:
                 cover_path = newKey
+        is_natural_sorted = False
+        if os_sorted(dirs) == sorted(dirs):
+            is_natural_sorted = True
+        dirs.sort(key=OS_SORT_KEY)
         for i, name in enumerate(dirs):
             tmpName = name
-            slugified = slugify(name)
+            slugified = slugify(name, is_natural_sorted)
             while os.path.exists(os.path.join(root, slugified)) and name.upper() != slugified.upper():
                 slugified += "A"
             chapterNames[slugified] = tmpName
@@ -943,8 +962,7 @@ def sanitizePermissions(filetree):
             os.chmod(os.path.join(root, name), S_IWRITE | S_IREAD)
         for name in dirs:
             os.chmod(os.path.join(root, name), S_IWRITE | S_IREAD | S_IEXEC)
-    # clean dot from original file
-    dot_clean(filetree)
+
 
 def dot_clean(filetree):
     for root, _, files in os.walk(filetree, topdown=False):
@@ -1063,10 +1081,6 @@ def detectSuboptimalProcessing(tmppath, orgpath):
                         os.remove(os.path.join(root, name))
                 except OSError as e:
                     raise RuntimeError(f"{name}: {e}")
-    # remove empty nested folders
-    for root, dirs, files in os.walk(tmppath, False):
-        if not files and not dirs:
-            os.rmdir(root)
     if alreadyProcessed:
         print("WARNING: Source files are probably created by KCC. The second conversion will decrease quality.")
         if GUI:
@@ -1089,23 +1103,27 @@ def createNewTome(parent):
     return tomePath, tomePathRoot
 
 
-def slugify(value):
-    if options.format == 'CBZ':
+def slugify(value, is_natural_sorted):
+    if options.format == 'CBZ' and is_natural_sorted:
         return value
-    value = slugify_ext(value, regex_pattern=r'[^-a-z0-9_\.]+').strip('.')
-    value = sub(r'0*([0-9]{4,})', r'\1', sub(r'([0-9]+)', r'0000\1', value, count=2))
+    if options.format != 'CBZ':
+        # convert all unicode to ascii via slugify
+        value = slugify_ext(value, regex_pattern=r'[^-a-z0-9_\.]+').strip('.')
+    if not is_natural_sorted:
+        # pad zeros to numbers
+        value = sub(r'0*([0-9]{4,})', r'\1', sub(r'([0-9]+)', r'0000\1', value, count=2))
     return value
 
 
 def makeZIP(zipfilename, basedir, isepub=False):
     start = perf_counter()
     zipfilename = os.path.abspath(zipfilename) + '.zip'
-    if '7z' in available_archive_tools():
+    if SEVENZIP in available_archive_tools():
         if isepub:
             mimetypeFile = open(os.path.join(basedir, 'mimetype'), 'w')
             mimetypeFile.write('application/epub+zip')
             mimetypeFile.close()
-        subprocess_run(['7z', 'a', '-tzip', zipfilename, os.path.join(basedir, "*")], capture_output=True, check=True)
+        subprocess_run([SEVENZIP, 'a', '-tzip', zipfilename, os.path.join(basedir, "*")], capture_output=True, check=True)
     else:
         zipOutput = ZipFile(zipfilename, 'w', ZIP_DEFLATED)
         if isepub:
@@ -1170,6 +1188,8 @@ def makeParser():
                                 help="Shift first page to opposite side in landscape for spread alignment")
     output_options.add_argument("--norotate", action="store_true", dest="norotate", default=False,
                                 help="Do not rotate double page spreads in spread splitter option.")
+    output_options.add_argument("--rotatefirst", action="store_true", dest="rotatefirst", default=False,
+                                help="Put rotated 2 page spread first in spread splitter option.")
 
     processing_options.add_argument("-n", "--noprocessing", action="store_true", dest="noprocessing", default=False,
                                     help="Do not modify image and ignore any profil or processing option")
@@ -1305,13 +1325,13 @@ def checkTools(source):
     source = source.upper()
     if source.endswith('.CB7') or source.endswith('.7Z') or source.endswith('.RAR') or source.endswith('.CBR') or \
             source.endswith('.ZIP') or source.endswith('.CBZ'):
-        if '7z' not in available_archive_tools():
+        if SEVENZIP not in available_archive_tools():
             print('ERROR: 7z is missing!')
             sys.exit(1)
     if options.format == 'MOBI':
         try:
             subprocess_run(['kindlegen', '-locale', 'en'], stdout=PIPE, stderr=STDOUT, check=True)
-        except FileNotFoundError:
+        except (FileNotFoundError, CalledProcessError):
             print('ERROR: KindleGen is missing!')
             sys.exit(1)
 
@@ -1382,6 +1402,7 @@ def makeBook(source, qtgui=None):
     path = getWorkFolder(source)
     print("Checking images...")
     getComicInfo(os.path.join(path, "OEBPS", "Images"), source)
+    removeNonImages(os.path.join(path, "OEBPS", "Images"))
     detectSuboptimalProcessing(os.path.join(path, "OEBPS", "Images"), source)
     chapterNames, cover_path = sanitizeTree(os.path.join(path, 'OEBPS', 'Images'))
     cover = image.Cover(cover_path, options)

@@ -18,9 +18,7 @@
 # PERFORMANCE OF THIS SOFTWARE.
 #
 
-from functools import lru_cache
 import os
-from hashlib import md5
 from html.parser import HTMLParser
 import subprocess
 from packaging.version import Version
@@ -50,12 +48,6 @@ class HTMLStripper(HTMLParser):
 def getImageFileName(imgfile):
     name, ext = os.path.splitext(imgfile)
     ext = ext.lower()
-    if (name.startswith('.') and len(name) == 1):
-        return None
-    if name.startswith('._'):
-        return None
-    if ext not in ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.jp2', '.j2k', '.jpx']:
-        return None
     return [name, ext]
 
 
@@ -131,19 +123,6 @@ def dependencyCheck(level):
     if len(missing) > 0:
         print('ERROR: ' + ', '.join(missing) + ' is not installed!')
         sys.exit(1)
-
-@lru_cache
-def available_archive_tools():
-    available = []
-
-    for tool in ['tar', '7z', 'unar', 'unrar']:
-        try:
-            subprocess_run([tool], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
-            available.append(tool)
-        except FileNotFoundError:
-            pass
-    
-    return available
 
 def subprocess_run(command, **kwargs):
     if (os.name == 'nt'):
