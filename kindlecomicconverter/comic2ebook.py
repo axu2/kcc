@@ -279,7 +279,7 @@ def buildNAV(dstdir, title, chapters, chapternames):
 def buildOPF(dstdir, title, filelist, cover=None):
     opffile = os.path.join(dstdir, 'OEBPS', 'content.opf')
     deviceres = options.profileData[1]
-    if options.righttoleft:
+    if not options.righttoleft:
         writingmode = "horizontal-rl"
     else:
         writingmode = "horizontal-lr"
