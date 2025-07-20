@@ -97,10 +97,11 @@ class ProfileData:
     ProfilesKindlePDOC = {
         'KPW34': ("Kindle Paperwhite 3/4/Oasis", (1072, 1448), Palette16, 1.8),
         'K810': ("Kindle 8/10", (600, 800), Palette16, 1.8),
-        'KO': ("Kindle Oasis 2/3/Paperwhite 12/Colorsoft 12", (1264, 1680), Palette16, 1.8),
+        'KO': ("Kindle Oasis 2/3/Paperwhite 12", (1264, 1680), Palette16, 1.8),
         'K11': ("Kindle 11", (1072, 1448), Palette16, 1.8),
         'KPW5': ("Kindle Paperwhite 5/Signature Edition", (1236, 1648), Palette16, 1.8),
         'KS': ("Kindle Scribe", (1860, 2480), Palette16, 1.8),
+        'KCS': ("Kindle Colorsoft 12", (1264, 1680), Palette16, 1.8),
     }
 
     ProfilesKindle = {
@@ -259,7 +260,6 @@ class ComicPage:
         _, self.size, self.palette, self.gamma = self.opt.profileData
         if self.opt.hq:
             self.size = (int(self.size[0] * 1.5), int(self.size[1] * 1.5))
-        self.kindle_scribe_azw3 = (options.profile == 'KS') and (options.format in ('MOBI', 'EPUB'))
         self.original_color_mode = image.mode
         self.image = image.convert("RGB")
         self.fill = fill
@@ -313,6 +313,14 @@ class ComicPage:
                 self.save_with_codec(self.image.crop((0, 1920, w, h)), self.targetPathStart + self.targetPathOrder + '-below')
             elif self.opt.kindle_scribe_azw3:
                 targetPath = self.save_with_codec(self.image, self.targetPathStart + self.targetPathOrder + '-whole')
+
+            elif self.opt.kindle_colorsoft_azw3 and self.image.size[1] > 1448:
+                w, h = self.image.size
+                targetPath = self.save_with_codec(self.image.crop((0, 0, w, 1448)), self.targetPathStart + self.targetPathOrder + '-above')
+                self.save_with_codec(self.image.crop((0, 1448, w, h)), self.targetPathStart + self.targetPathOrder + '-below')
+            elif self.opt.kindle_colorsoft_azw3:
+                targetPath = self.save_with_codec(self.image, self.targetPathStart + self.targetPathOrder + '-whole')
+
             else:
                 targetPath = self.save_with_codec(self.image, self.targetPathStart + self.targetPathOrder)
             if os.path.isfile(self.orgPath):
