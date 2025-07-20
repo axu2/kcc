@@ -453,7 +453,7 @@ def buildEPUB(path, chapternames, tomenumber, ischunked, cover: image.Cover, len
                   "padding: 0;\n",
                   "}\n",
                   ])
-    if options.kindle_scribe_azw3:
+    if options.kindle_scribe_azw3 or options.kindle_colorsoft_azw3:
         f.writelines([
                     "img {\n",
                     "display: block;\n",
