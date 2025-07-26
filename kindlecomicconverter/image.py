@@ -472,6 +472,11 @@ class Cover:
                 self.image = self.image.crop((0, 0, w/2 - w * 0.03, h))
             else:
                 self.image = self.image.crop((w/2 + w * 0.03, 0, w, h))
+        elif w / h > 1.33:
+            if self.options.righttoleft:
+                self.image = self.image.crop((w/3, 0, 5/6*w, h))
+            else:
+                pass
 
     def save_to_epub(self, target, tomeid, len_tomes=0):
         try:
