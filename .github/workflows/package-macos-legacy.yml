@@ -44,6 +44,7 @@ jobs:
           python3 --version
           pip3 install --upgrade pip setuptools wheel pyinstaller certifi
           pip3 install --upgrade -r requirements.txt
+          ./gen_ui_files.sh
       - uses: actions/setup-node@v4
         with:
           node-version: 16
