@@ -30,12 +30,12 @@ jobs:
     env:
       # We need the official Python, because the GA ones only support newer macOS versions
       # The deployment target is picked up by the Python build tools automatically
-      PYTHON_VERSION: 3.9.1
+      PYTHON_VERSION: 3.11.9
       MACOSX_DEPLOYMENT_TARGET: 10.13
     steps:
       - uses: actions/checkout@v4
       - name: Get Python
-        run: curl https://www.python.org/ftp/python/${PYTHON_VERSION}/python-${PYTHON_VERSION}-macosx10.9.pkg -o "python.pkg"
+        run: curl https://www.python.org/ftp/python/3.11.9/python-3.11.9-macos11.pkg -o "python.pkg"
       - name: Install Python
         run: |
           sudo installer -pkg python.pkg -target /
