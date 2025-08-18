@@ -25,6 +25,8 @@ from pathlib import Path
 from functools import cached_property
 import mozjpeg_lossless_optimization
 from PIL import Image, ImageOps, ImageStat, ImageChops, ImageFilter, ImageDraw
+
+from .rainbow_artifacts_eraser import erase_rainbow_artifacts
 from .page_number_crop_alg import get_bbox_crop_margin_page_number, get_bbox_crop_margin
 from .inter_panel_crop_alg import crop_empty_inter_panel
 
@@ -341,16 +343,31 @@ class ComicPage:
                 image.save(targetPath, 'JPEG', optimize=1, quality=85)
         return targetPath
 
-    def autocontrastImage(self):
+    def gammaCorrectImage(self):
         gamma = self.opt.gamma
         if gamma < 0.1:
             gamma = self.gamma
             if self.gamma != 1.0 and self.color:
                 gamma = 1.0
         if gamma == 1.0:
-            self.image = ImageOps.autocontrast(self.image)
+            pass
         else:
-            self.image = ImageOps.autocontrast(Image.eval(self.image, lambda a: int(255 * (a / 255.) ** gamma)))
+            self.image = Image.eval(self.image, lambda a: int(255 * (a / 255.) ** gamma))
+
+    def autocontrastImage(self):
+        if self.opt.autolevel and not self.color:
+            self.convertToGrayscale()
+            h = self.image.histogram()
+            most_common_dark_pixel_count = max(h[:64])
+            black_point = h.index(most_common_dark_pixel_count)
+            bp = black_point
+            self.image = self.image.point(lambda p: p if p > bp else bp)
+
+        # don't autocontrast grayscale pages that were originally color
+        if not self.opt.forcecolor and self.color:
+            return
+
+        self.image = ImageOps.autocontrast(self.image, preserve_tone=True)
 
     def convertToGrayscale(self):
         self.image = self.image.convert('L')
@@ -358,19 +375,16 @@ class ComicPage:
     def quantizeImage(self):
         # remove all color pixels from image, since colorCheck() has some tolerance
         # quantize with a small number of color pixels in a mostly b/w image can have unexpected results
-        self.image = self.image.convert("L").convert("RGB")
+        self.image = self.image.convert("RGB")
 
         palImg = Image.new('P', (1, 1))
         palImg.putpalette(self.palette)
         self.image = self.image.quantize(palette=palImg)
 
-    def optimizeForDisplay(self, reducerainbow):
-        # Reduce rainbow artifacts for grayscale images by breaking up dither patterns that cause Moire interference with color filter array
-        if reducerainbow and not self.color:
-            unsharpFilter = ImageFilter.UnsharpMask(radius=1, percent=100)
-            self.image = self.image.filter(unsharpFilter)
-            self.image = self.image.filter(ImageFilter.BoxBlur(1.0))
-            self.image = self.image.filter(unsharpFilter)
+    def optimizeForDisplay(self, eraserainbow, is_color):
+        # Erase rainbow artifacts for grayscale and color images by removing spectral frequencies that cause Moire interference with color filter array
+        if eraserainbow and all(dim > 1 for dim in self.image.size):
+            self.image = erase_rainbow_artifacts(self.image, is_color)
 
     def resizeImage(self):
         ratio_device = float(self.size[1]) / float(self.size[0])
@@ -383,7 +397,7 @@ class ComicPage:
         else: # if image bigger than device resolution or smaller with upscaling
             if abs(ratio_image - ratio_device) < AUTO_CROP_THRESHOLD:
                 self.image = ImageOps.fit(self.image, self.size, method=method)
-            elif (self.opt.format == 'CBZ' or self.opt.kfx) and not self.opt.white_borders:
+            elif (self.opt.format in ('CBZ', 'PDF') or self.opt.kfx) and not self.opt.white_borders:
                 self.image = ImageOps.pad(self.image, self.size, method=method, color=self.fill)
             else:
                 self.image = ImageOps.contain(self.image, self.size, method=method)
@@ -409,12 +423,20 @@ class ComicPage:
         bbox = get_bbox_crop_margin_page_number(self.image, power, self.fill)
         
         if bbox:
+            w, h = self.image.size
+            left, upper, right, lower = bbox
+            # don't crop more than 10% of image
+            bbox = (min(0.1*w, left), min(0.1*h, upper), max(0.9*w, right), max(0.9*h, lower))
             self.maybeCrop(bbox, minimum)
 
     def cropMargin(self, power, minimum):
         bbox = get_bbox_crop_margin(self.image, power, self.fill)
         
         if bbox:
+            w, h = self.image.size
+            left, upper, right, lower = bbox
+            # don't crop more than 10% of image
+            bbox = (min(0.1*w, left), min(0.1*h, upper), max(0.9*w, right), max(0.9*h, lower))
             self.maybeCrop(bbox, minimum)
 
     def cropInterPanelEmptySections(self, direction):
@@ -449,7 +471,7 @@ class Cover:
                 self.image = self.image.crop((w/6, 0, w/2 - w * 0.02, h))
             else:
                 self.image = self.image.crop((w/2 + w * 0.02, 0, 5/6 * w, h))
-        elif w / h > 1.3:
+        elif w / h > 1.34:
             if self.options.righttoleft:
                 self.image = self.image.crop((0, 0, w/2 - w * 0.03, h))
             else:

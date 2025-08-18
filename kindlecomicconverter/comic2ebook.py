@@ -32,7 +32,7 @@ from typing import List
 from zipfile import ZipFile, ZIP_STORED, ZIP_DEFLATED
 from tempfile import mkdtemp, gettempdir, TemporaryFile
 from shutil import move, copytree, rmtree, copyfile
-from multiprocessing import Pool
+from multiprocessing import Pool, cpu_count
 from uuid import uuid4
 from natsort import os_sort_keygen, os_sorted
 from slugify import slugify as slugify_ext
@@ -41,13 +41,14 @@ from pathlib import Path
 from subprocess import STDOUT, PIPE, CalledProcessError
 from psutil import virtual_memory, disk_usage
 from html import escape as hescape
+import pymupdf
+import numpy as np
 
-from .shared import getImageFileName, walkSort, walkLevel, sanitizeTrace, subprocess_run
+from .shared import getImageFileName, walkSort, walkLevel, sanitizeTrace, subprocess_run, dot_clean
 from .comicarchive import SEVENZIP, available_archive_tools
 from . import comic2panel
 from . import image
 from . import comicarchive
-from . import pdfjpgextract
 from . import dualmetafix
 from . import metadata
 from . import kindle
@@ -125,9 +126,10 @@ def buildHTML(path, imgfile, imgfilepath, imgfile2=None):
                   "</head>\n",
                   "<body style=\"" + additionalStyle + "\">\n",
                   "<div style=\"text-align:center;top:" + getTopMargin(deviceres, imgsizeframe) + "%;\">\n",
-                  # this display none div fixes formatting issues with virtual panel mode, for some reason
-                  '<div style="display:none;">.</div>\n',
     ])
+    if options.iskindle:
+        # this display none div fixes formatting issues with virtual panel mode, for some reason
+        f.write('<div style="display:none;">.</div>\n')
     f.write(f'<img width="{imgsize[0]}" height="{imgsize[1]}" src="{"../" * backref}Images/{postfix}{imgfile}"/>\n')
     if imgfile2:
         f.write(f'<img width="{imgsize2[0]}" height="{imgsize2[1]}" src="{"../" * backref}Images/{postfix}{imgfile2}"/>\n')
@@ -580,6 +582,34 @@ def buildEPUB(path, chapternames, tomenumber, ischunked, cover: image.Cover, len
     buildOPF(path, options.title, filelist, cover)
 
 
+def buildPDF(path, title, cover=None, output_file=None):
+    """
+    Build a PDF file from processed comic images.
+    Images are combined into a single PDF optimized for e-readers.
+    """
+    start = perf_counter()
+    # open empty PDF
+    with pymupdf.open() as doc:
+        # Stream images to PDF
+        for root, dirs, files in os.walk(os.path.join(path, "OEBPS", "Images")):
+            files.sort(key=OS_SORT_KEY)
+            dirs.sort(key=OS_SORT_KEY)
+            for file in files:
+                w, h = Image.open(os.path.join(root, file)).size
+                page = doc.new_page(width=w, height=h)
+                page.insert_image(page.rect, filename=os.path.join(root, file))
+
+        # determine output filename if not provided
+        if output_file is None:
+            output_file = getOutputFilename(path, None, '.pdf', '')
+        
+        # Save with optimizations for smaller file size
+        doc.save(output_file, deflate=True, garbage=4, clean=True)
+    end = perf_counter()
+    print(f"MuPDF output: {end-start} sec")
+    return output_file
+
+
 def imgDirectoryProcessing(path):
     global workerPool, workerOutput
     workerPool = Pool(maxtasksperchild=100)
@@ -639,25 +669,161 @@ def imgFileProcessing(work):
         workImg = image.ComicPageParser((dirpath, afile), opt)
         for i in workImg.payload:
             img = image.ComicPage(opt, *i)
+            is_color = (opt.forcecolor and img.color)
             if opt.cropping == 2 and not opt.webtoon:
                 img.cropPageNumber(opt.croppingp, opt.croppingm)
             if opt.cropping == 1 and not opt.webtoon:
                 img.cropMargin(opt.croppingp, opt.croppingm)
             if opt.interpanelcrop > 0:
                 img.cropInterPanelEmptySections("horizontal" if opt.interpanelcrop == 1 else "both")
+
+            img.gammaCorrectImage()
+
             img.autocontrastImage()
             img.resizeImage()
-            img.optimizeForDisplay(opt.reducerainbow)
-            if opt.forcecolor and img.color:
+            img.optimizeForDisplay(opt.eraserainbow, is_color)
+
+            if is_color:
                 pass
             elif opt.forcepng:
-                img.quantizeImage()
+                img.convertToGrayscale()
+                if opt.format != 'PDF':
+                    img.quantizeImage()
             else:
                 img.convertToGrayscale()
             output.append(img.saveToDir())
         return output
     except Exception:
         return str(sys.exc_info()[1]), sanitizeTrace(sys.exc_info()[2])
+
+
+def render_page(vector):
+    """Render a page range of a document.
+
+    Notes:
+        The PyMuPDF document cannot be part of the argument, because that
+        cannot be pickled. So we are being passed in just its filename.
+        This is no performance issue, because we are a separate process and
+        need to open the document anyway.
+        Any page-specific function can be processed here - rendering is just
+        an example - text extraction might be another.
+        The work must however be self-contained: no inter-process communication
+        or synchronization is possible with this design.
+        Care must also be taken with which parameters are contained in the
+        argument, because it will be passed in via pickling by the Pool class.
+        So any large objects will increase the overall duration.
+    Args:
+        vector: a list containing required parameters.
+    """
+    # recreate the arguments
+    idx = vector[0]  # this is the segment number we have to process
+    cpu = vector[1]  # number of CPUs
+    filename = vector[2]  # document filename
+    output_dir = vector[3]
+    target_height = vector[4]
+    with pymupdf.open(filename) as doc:  # open the document
+        num_pages = doc.page_count  # get number of pages
+
+        # pages per segment: make sure that cpu * seg_size >= num_pages!
+        seg_size = int(num_pages / cpu + 1)
+        seg_from = idx * seg_size  # our first page number
+        seg_to = min(seg_from + seg_size, num_pages)  # last page number
+
+        for i in range(seg_from, seg_to):  # work through our page segment
+            page = doc[i]
+            zoom = target_height / page.rect.height
+            mat = pymupdf.Matrix(zoom, zoom)
+            # TODO: decide colorspace earlier so later color check is cheaper.
+            pix = page.get_pixmap(matrix=mat, colorspace='RGB', alpha=False)
+            pix.save(os.path.join(output_dir, "p-%i.png" % i))
+        print("Processed page numbers %i through %i" % (seg_from, seg_to - 1))
+
+
+
+def extract_page(vector):
+    """For pages with single image (and no text). Otherwise it's recommended to use render_page()
+
+    Notes:
+        The PyMuPDF document cannot be part of the argument, because that
+        cannot be pickled. So we are being passed in just its filename.
+        This is no performance issue, because we are a separate process and
+        need to open the document anyway.
+        Any page-specific function can be processed here - rendering is just
+        an example - text extraction might be another.
+        The work must however be self-contained: no inter-process communication
+        or synchronization is possible with this design.
+        Care must also be taken with which parameters are contained in the
+        argument, because it will be passed in via pickling by the Pool class.
+        So any large objects will increase the overall duration.
+    Args:
+        vector: a list containing required parameters.
+    """
+    # recreate the arguments
+    idx = vector[0]  # this is the segment number we have to process
+    cpu = vector[1]  # number of CPUs
+    filename = vector[2]  # document filename
+    output_dir = vector[3]
+
+
+    with pymupdf.open(filename) as doc: # open the document
+        num_pages = doc.page_count  # get number of pages
+
+        # pages per segment: make sure that cpu * seg_size >= num_pages!
+        seg_size = int(num_pages / cpu + 1)
+        seg_from = idx * seg_size  # our first page number
+        seg_to = min(seg_from + seg_size, num_pages)  # last page number
+
+        for i in range(seg_from, seg_to):  # work through our page segment
+            output_path = os.path.join(output_dir, "p-%i.png" % i)
+            page = doc.load_page(i)
+            image_list = page.get_images()
+            if len(image_list) > 1:
+                raise UserWarning("mupdf_pdf_extract_page_image() function can be used only with single image pages.")
+            if not image_list:
+                width, height = int(page.rect.width), int(page.rect.height)
+                blank_page = Image.new("RGB", (width, height), "white")
+                blank_page.save(output_path)
+            xref = image_list[0][0]
+            d = doc.extract_image(xref)
+            if d['cs-name'] == 'DeviceCMYK':
+                pix = pymupdf.Pixmap(doc, xref)
+                pix = pymupdf.Pixmap(pymupdf.csRGB, pix)
+                pix.save(output_path)
+                
+            else:
+                with open(Path(output_path).with_suffix('.' + d['ext']), "wb") as imgout:
+                    imgout.write(d["image"])
+        print("Processed page numbers %i through %i" % (seg_from, seg_to - 1))
+
+
+
+def mupdf_pdf_process_pages_parallel(filename, output_dir, target_height):
+    render = False
+    with pymupdf.open(filename) as doc:
+        for page in doc:
+            page_text = page.get_text().strip()
+            if page_text != "":
+                render = True
+                break
+            if len(page.get_images()) > 1:
+                render = True
+                break
+
+    cpu = cpu_count()
+
+    # make vectors of arguments for the processes
+    vectors = [(i, cpu, filename, output_dir, target_height) for i in range(cpu)]
+    print("Starting %i processes for '%s'." % (cpu, filename))
+
+
+    start = perf_counter()
+    with Pool() as pool:
+        results = pool.map(
+            render_page if render else extract_page, vectors
+        )
+    end = perf_counter()
+    print(f"MuPDF: {end - start} sec")
+
 
 
 def getWorkFolder(afile):
@@ -678,19 +844,37 @@ def getWorkFolder(afile):
         if disk_usage(gettempdir())[2] < os.path.getsize(afile) * 2.5:
             raise UserWarning("Not enough disk space to perform conversion.")
         if afile.lower().endswith('.pdf'):
-            pdf = pdfjpgextract.PdfJpgExtract(afile)
-            path, njpg = pdf.extract()
-            workdir = path
+            workdir = mkdtemp('', 'KCC-', os.path.dirname(afile))
+            path = workdir
             sanitizePermissions(path)
-            if njpg == 0:
+            target_height = options.profileData[1][1]
+            if options.cropping == 1:
+                target_height = target_height + target_height*0.20 #Account for possible margin at the top and bottom
+            elif options.cropping == 2:
+                target_height = target_height + target_height*0.25 #Account for possible margin at the top and bottom with page number
+            try:
+                mupdf_pdf_process_pages_parallel(afile, workdir, target_height)
+            except Exception as e:
                 rmtree(path, True)
-                raise UserWarning("Failed to extract images from PDF file.")
+                raise UserWarning(f"Failed to extract images from PDF file. {e}")
         else:
             workdir = mkdtemp('', 'KCC-', os.path.dirname(afile))
             try:
                 cbx = comicarchive.ComicArchive(afile)
                 path = cbx.extract(workdir)
                 sanitizePermissions(path)
+
+                tdir = os.listdir(workdir)
+                if len(tdir) == 2 and 'ComicInfo.xml' in tdir:
+                    tdir.remove('ComicInfo.xml')
+                    if os.path.isdir(os.path.join(workdir, tdir[0])):
+                        os.replace(
+                            os.path.join(workdir, 'ComicInfo.xml'),
+                            os.path.join(workdir, tdir[0], 'ComicInfo.xml')
+                        )
+                if len(tdir) == 1 and os.path.isdir(os.path.join(workdir, tdir[0])):
+                    path = os.path.join(workdir, tdir[0])
+ 
             except OSError as e:
                 rmtree(workdir, True)
                 raise UserWarning(e)
@@ -820,13 +1004,16 @@ def removeNonImages(filetree):
     for root, dirs, files in os.walk(filetree):
         for name in files:
             _, ext = getImageFileName(name)
-            if ext not in ('.png', '.jpg', '.jpeg', '.gif', '.webp', '.jp2'):
+            if ext not in ('.png', '.jpg', '.jpeg', '.gif', '.webp', '.jp2', '.avif'):
                 if os.path.exists(os.path.join(root, name)):
                     os.remove(os.path.join(root, name))
     # remove empty nested folders
     for root, dirs, files in os.walk(filetree, False):
         if not files and not dirs:
             os.rmdir(root)
+    
+    if not os.listdir(Path(filetree).parent):
+        raise UserWarning('No images detected, nested archives are not supported.')
 
 
 def sanitizeTree(filetree):
@@ -880,21 +1067,15 @@ def sanitizePermissions(filetree):
             os.chmod(os.path.join(root, name), S_IWRITE | S_IREAD)
         for name in dirs:
             os.chmod(os.path.join(root, name), S_IWRITE | S_IREAD | S_IEXEC)
-
-
-def dot_clean(filetree):
-    for root, _, files in os.walk(filetree, topdown=False):
-        for name in files:
-            if name.startswith('._'):
-                os.remove(os.path.join(root, name))
+    dot_clean(filetree)
 
 
 def chunk_directory(path):
     level = -1
     for root, _, files in os.walk(os.path.join(path, 'OEBPS', 'Images')):
         for f in files:
-            # Windows MAX_LENGTH = 260 plus some buffer
-            if len(os.path.join(root, f)) > 180:
+            # Windows MAX_LEN = 260 plus some buffer
+            if os.name == 'nt' and len(os.path.join(root, f)) > 180:
                 flattenTree(os.path.join(path, 'OEBPS', 'Images'))
                 level = 1
                 break               
@@ -985,6 +1166,7 @@ def detectSuboptimalProcessing(tmppath, orgpath):
                 try:
                     img = Image.open(path)
                     imageNumber += 1
+                    # count images smaller than device resolution
                     if options.profileData[1][0] > img.size[0] and options.profileData[1][1] > img.size[1]:
                         imageSmaller += 1
                 except Exception as err:
@@ -1032,7 +1214,6 @@ def slugify(value, is_natural_sorted):
         value = sub(r'0*([0-9]{4,})', r'\1', sub(r'([0-9]+)', r'0000\1', value, count=2))
     return value
 
-
 def makeZIP(zipfilename, basedir, isepub=False):
     start = perf_counter()
     zipfilename = os.path.abspath(zipfilename) + '.zip'
@@ -1056,7 +1237,6 @@ def makeZIP(zipfilename, basedir, isepub=False):
     end = perf_counter()
     print(f"makeZIP time: {end - start} seconds")
     return zipfilename
-
 
 def makeParser():
     psr = ArgumentParser(prog="kcc-c2e", usage="kcc-c2e [options] [input]", add_help=False)
@@ -1095,7 +1275,7 @@ def makeParser():
     output_options.add_argument("-a", "--author", action="store", dest="author", default="defaultauthor",
                                 help="Author name [Default=KCC]")
     output_options.add_argument("-f", "--format", action="store", dest="format", default="Auto",
-                                help="Output format (Available options: Auto, MOBI, EPUB, CBZ, KFX, MOBI+EPUB) "
+                                help="Output format (Available options: Auto, MOBI, EPUB, CBZ, KFX, MOBI+EPUB, PDF) "
                                      "[Default=Auto]")
     output_options.add_argument("--nokepub", action="store_true", dest="noKepub", default=False,
                                 help="If format is EPUB, output file with '.epub' extension rather than '.kepub.epub'")
@@ -1119,6 +1299,8 @@ def makeParser():
                                     help="Double page parsing mode. 0: Split 1: Rotate 2: Both [Default=0]")
     processing_options.add_argument("-g", "--gamma", type=float, dest="gamma", default="0.0",
                                     help="Apply gamma correction to linearize the image [Default=Auto]")
+    output_options.add_argument("--autolevel", action="store_true", dest="autolevel", default=False,
+                                help="Set most common dark pixel value to be black point for leveling.")
     processing_options.add_argument("-c", "--cropping", type=int, dest="cropping", default="2",
                                     help="Set cropping mode. 0: Disabled 1: Margins 2: Margins + page numbers [Default=2]")
     processing_options.add_argument("--cp", "--croppingpower", type=float, dest="croppingp", default="1.0",
@@ -1135,8 +1317,8 @@ def makeParser():
                                     help="Disable autodetection and force white borders")
     processing_options.add_argument("--forcecolor", action="store_true", dest="forcecolor", default=False,
                                     help="Don't convert images to grayscale")
-    output_options.add_argument("--reducerainbow", action="store_true", dest="reducerainbow", default=False,
-                                help="Reduce rainbow effect on color eink by slightly blurring images.")
+    output_options.add_argument("--eraserainbow", action="store_true", dest="eraserainbow", default=False,
+                                help="Erase rainbow effect on color eink screen by attenuating interfering frequencies")
     processing_options.add_argument("--forcepng", action="store_true", dest="forcepng", default=False,
                                     help="Create PNG files instead JPEG")
     processing_options.add_argument("--mozjpeg", action="store_true", dest="mozjpeg", default=False,
@@ -1183,6 +1365,8 @@ def checkOptions(options):
             options.format = 'CBZ'
         elif options.profile in image.ProfileData.ProfilesKindle.keys():
             options.format = 'MOBI'
+        elif options.profile in image.ProfileData.ProfilesRemarkable.keys():
+            options.format = 'PDF'
         else:
             options.format = 'EPUB'
     if options.profile in image.ProfileData.ProfilesKindle.keys():
@@ -1337,7 +1521,7 @@ def makeBook(source, qtgui=None):
         imgDirectoryProcessing(os.path.join(path, "OEBPS", "Images"))
     if GUI:
         GUI.progressBarTick.emit('1')
-    if options.batchsplit > 0:
+    if options.batchsplit > 0 or options.targetsize:
         tomes = chunk_directory(path)
     else:
         tomes = [path]
@@ -1346,6 +1530,8 @@ def makeBook(source, qtgui=None):
     if GUI:
         if options.format == 'CBZ':
             GUI.progressBarTick.emit('Compressing CBZ files')
+        elif options.format == 'PDF':
+            GUI.progressBarTick.emit('Creating PDF files')
         else:
             GUI.progressBarTick.emit('Compressing EPUB files')
         GUI.progressBarTick.emit(str(len(tomes) + 1))
@@ -1367,6 +1553,14 @@ def makeBook(source, qtgui=None):
             else:
                 filepath.append(getOutputFilename(source, options.output, '.cbz', ''))
             makeZIP(tome + '_comic', os.path.join(tome, "OEBPS", "Images"))
+        elif options.format == 'PDF':
+            print("Creating PDF file with PyMuPDF...")
+            # determine output filename based on source and tome count
+            suffix = (' ' + str(tomeNumber)) if len(tomes) > 1 else ''
+            output_file = getOutputFilename(source, options.output, '.pdf', suffix)
+            # use optimized buildPDF logic with streaming and compression
+            output_pdf = buildPDF(tome, options.title, None, output_file)
+            filepath.append(output_pdf)
         else:
             print("Creating EPUB file...")
             if len(tomes) > 1:
@@ -1376,12 +1570,14 @@ def makeBook(source, qtgui=None):
                 buildEPUB(tome, chapterNames, tomeNumber, False, cover)
                 filepath.append(getOutputFilename(source, options.output, '.epub', ''))
             makeZIP(tome + '_comic', tome, True)
-        copyfile(tome + '_comic.zip', filepath[-1])
-        try:
-            os.remove(tome + '_comic.zip')
-        except FileNotFoundError:
-            # newly temporary created file is not found. It might have been already deleted
-            pass
+        # Copy files to final destination (PDF files are already saved directly)
+        if options.format != 'PDF':
+            copyfile(tome + '_comic.zip', filepath[-1])
+            try:
+                os.remove(tome + '_comic.zip')
+            except FileNotFoundError:
+                # newly temporary created file is not found. It might have been already deleted
+                pass
         rmtree(tome, True)
         if GUI:
             GUI.progressBarTick.emit('tick')
@@ -1412,10 +1608,15 @@ def makeBook(source, qtgui=None):
         if os.path.isfile(source):
             os.remove(source)
         elif os.path.isdir(source):
-            rmtree(source)
+            rmtree(source, True)
 
     end = perf_counter()
     print(f"makeBook: {end - start} seconds")
+    # Clean up temporary workspace
+    try:
+        rmtree(path, True)
+    except Exception:
+        pass
     return filepath
 
 
@@ -1495,3 +1696,4 @@ def makeMOBI(work, qtgui=None):
     makeMOBIWorkerPool.close()
     makeMOBIWorkerPool.join()
     return makeMOBIWorkerOutput
+

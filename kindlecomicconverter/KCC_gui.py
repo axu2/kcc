@@ -247,6 +247,8 @@ class WorkerThread(QThread):
             options.upscale = True
         if GUI.gammaBox.isChecked() and float(GUI.gammaValue) > 0.09:
             options.gamma = float(GUI.gammaValue)
+        if GUI.autoLevelBox.isChecked():
+            options.autolevel = True
         options.cropping = GUI.croppingBox.checkState().value
         if GUI.croppingBox.checkState() != Qt.CheckState.Unchecked:
             options.croppingp = float(GUI.croppingPowerValue)
@@ -260,8 +262,8 @@ class WorkerThread(QThread):
             options.batchsplit = 2
         if GUI.colorBox.isChecked():
             options.forcecolor = True
-        if GUI.reduceRainbowBox.isChecked():
-            options.reducerainbow = True
+        if GUI.eraseRainbowBox.isChecked():
+            options.eraserainbow = True
         if GUI.maximizeStrips.isChecked():
             options.maximizestrips = True
         if GUI.disableProcessingBox.isChecked():
@@ -322,6 +324,9 @@ class WorkerThread(QThread):
             if gui_current_format == 'CBZ':
                 MW.addMessage.emit('Creating CBZ files', 'info', False)
                 GUI.progress.content = 'Creating CBZ files'
+            elif gui_current_format == 'PDF':
+                MW.addMessage.emit('Creating PDF files', 'info', False)
+                GUI.progress.content = 'Creating PDF files'
             else:
                 MW.addMessage.emit('Creating EPUB files', 'info', False)
                 GUI.progress.content = 'Creating EPUB files'
@@ -366,6 +371,8 @@ class WorkerThread(QThread):
                 GUI.progress.content = ''
                 if gui_current_format == 'CBZ':
                     MW.addMessage.emit('Creating CBZ files... <b>Done!</b>', 'info', True)
+                elif gui_current_format == 'PDF':
+                    MW.addMessage.emit('Creating PDF files... <b>Done!</b>', 'info', True)
                 else:
                     MW.addMessage.emit('Creating EPUB files... <b>Done!</b>', 'info', True)
                 if 'MOBI' in gui_current_format:
@@ -462,7 +469,7 @@ class WorkerThread(QThread):
                 if os.path.isfile(path):
                     os.remove(path)
                 elif os.path.isdir(path):
-                    rmtree(path)
+                    rmtree(path, True)
         GUI.progress.content = ''
         GUI.progress.stop()
         MW.hideProgressBar.emit()
@@ -863,6 +870,7 @@ class KCCGUI(KCC_ui.Ui_mainWindow):
                                            'rotateBox': GUI.rotateBox.checkState().value,
                                            'qualityBox': GUI.qualityBox.checkState().value,
                                            'gammaBox': GUI.gammaBox.checkState().value,
+                                           'autoLevelBox': GUI.autoLevelBox.checkState().value,
                                            'croppingBox': GUI.croppingBox.checkState().value,
                                            'croppingPowerSlider': float(self.croppingPowerValue) * 100,
                                            'preserveMarginBox': self.preserveMarginBox.value(),
@@ -872,7 +880,7 @@ class KCCGUI(KCC_ui.Ui_mainWindow):
                                            'webtoonBox': GUI.webtoonBox.checkState().value,
                                            'outputSplit': GUI.outputSplit.checkState().value,
                                            'colorBox': GUI.colorBox.checkState().value,
-                                           'reduceRainbowBox': GUI.reduceRainbowBox.checkState().value,
+                                           'eraseRainbowBox': GUI.eraseRainbowBox.checkState().value,
                                            'disableProcessingBox': GUI.disableProcessingBox.checkState().value,
                                            'comicinfoTitleBox': GUI.comicinfoTitleBox.checkState().value,
                                            'mozJpegBox': GUI.mozJpegBox.checkState().value,
@@ -1008,6 +1016,7 @@ class KCCGUI(KCC_ui.Ui_mainWindow):
             "MOBI/AZW3": {'icon': 'MOBI', 'format': 'MOBI'},
             "EPUB": {'icon': 'EPUB', 'format': 'EPUB'},
             "CBZ": {'icon': 'CBZ', 'format': 'CBZ'},
+            "PDF": {'icon': 'EPUB', 'format': 'PDF'},
             "KFX (does not work)": {'icon': 'KFX', 'format': 'KFX'},
             "MOBI + EPUB": {'icon': 'MOBI', 'format': 'MOBI+EPUB'},
             "EPUB (200MB limit)": {'icon': 'EPUB', 'format': 'EPUB-200MB'},
@@ -1089,11 +1098,11 @@ class KCCGUI(KCC_ui.Ui_mainWindow):
                           'Label': 'KoS'},
             "Kobo Elipsa": {'PVOptions': False, 'ForceExpert': False, 'DefaultFormat': 1, 'DefaultUpscale': True, 'ForceColor': False,
                             'Label': 'KoE'},
-            "reMarkable 1": {'PVOptions': False, 'ForceExpert': False, 'DefaultFormat': 1, 'DefaultUpscale': True, 'ForceColor': False,
+            "reMarkable 1": {'PVOptions': False, 'ForceExpert': False, 'DefaultFormat': 3, 'DefaultUpscale': True, 'ForceColor': False,
                              'Label': 'Rmk1'},
-            "reMarkable 2": {'PVOptions': False, 'ForceExpert': False, 'DefaultFormat': 1, 'DefaultUpscale': True, 'ForceColor': False,
+            "reMarkable 2": {'PVOptions': False, 'ForceExpert': False, 'DefaultFormat': 3, 'DefaultUpscale': True, 'ForceColor': False,
                              'Label': 'Rmk2'},
-            "reMarkable Paper Pro": {'PVOptions': False, 'ForceExpert': False, 'DefaultFormat': 1, 'DefaultUpscale': True, 'ForceColor': True,
+            "reMarkable Paper Pro": {'PVOptions': False, 'ForceExpert': False, 'DefaultFormat': 3, 'DefaultUpscale': True, 'ForceColor': True,
                              'Label': 'RmkPP'},
             "Other": {'PVOptions': False, 'ForceExpert': True, 'DefaultFormat': 1, 'DefaultUpscale': False, 'ForceColor': False,
                       'Label': 'OTHER'},
