@@ -286,6 +286,7 @@ class ComicPage:
     def color(self):
         if self.original_color_mode in ("L", "1"):
             return False
+        return True
         img = self.image.convert("YCbCr")
         _, cb, cr = img.split()
 
