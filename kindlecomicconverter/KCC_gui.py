@@ -1212,6 +1212,10 @@ class KCCGUI(KCC_ui.Ui_mainWindow):
                              'Label': 'RmkPPMove'},
             "Other": {'PVOptions': False, 'ForceExpert': True, 'DefaultFormat': 1, 'DefaultUpscale': False, 'ForceColor': False,
                       'Label': 'OTHER'},
+            "Kindle Custom": {'PVOptions': False, 'ForceExpert': True, 'DefaultFormat': 0, 'DefaultUpscale': False, 'ForceColor': False,
+                      'Label': 'KCustom'},
+            "Kobo Custom": {'PVOptions': False, 'ForceExpert': True, 'DefaultFormat': 1, 'DefaultUpscale': False, 'ForceColor': False,
+                      'Label': 'KoCustom'},
         }
         profilesGUI = [
             "Kindle Colorsoft",
@@ -1235,6 +1239,8 @@ class KCCGUI(KCC_ui.Ui_mainWindow):
             "reMarkable Paper Pro Move",
             "Separator",
             "Other",
+            "Kindle Custom",
+            "Kobo Custom",
             "Separator",
             "Kindle 8/10",
             "Kindle Oasis 8",

@@ -101,6 +101,7 @@ class ProfileData:
         'K11': ("Kindle 11", (1072, 1448), Palette16, 1.0),
         'KPW5': ("Kindle Paperwhite 5/Signature Edition", (1236, 1648), Palette16, 1.0),
         'KS': ("Kindle Scribe", (1860, 2480), Palette16, 1.0),
+        'KCustom': ("Kindle Custom", (0, 0), Palette16, 1.0),
     }
 
     ProfilesKindle = {
@@ -124,6 +125,7 @@ class ProfileData:
         'KoF': ("Kobo Forma", (1440, 1920), Palette16, 1.0),
         'KoS': ("Kobo Sage", (1440, 1920), Palette16, 1.0),
         'KoE': ("Kobo Elipsa", (1404, 1872), Palette16, 1.0),
+        'KoCustom': ("Kobo Custom", (0, 0), Palette16, 1.0),
     }
 
     ProfilesRemarkable = {
