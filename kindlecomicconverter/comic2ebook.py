@@ -1360,6 +1360,8 @@ def makeParser():
                                     help="Do not modify image and ignore any profile or processing option")
     processing_options.add_argument("--pdfextract", action="store_true", dest="pdfextract", default=False,
                                     help="Use the legacy PDF image extraction method from KCC 8 and earlier")
+    processing_options.add_argument("--coverfill", action="store_true", dest="coverfill", default=False,
+                                    help="Crop cover to fill screen")
     processing_options.add_argument("-u", "--upscale", action="store_true", dest="upscale", default=False,
                                     help="Resize images smaller than device's resolution")
     processing_options.add_argument("-s", "--stretch", action="store_true", dest="stretch", default=False,
