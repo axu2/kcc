@@ -139,7 +139,7 @@ class DualMobiMetaFix:
     def __init__(self, infile, outfile, asin, is_pdoc):
         cdetype = b'EBOK'
         if is_pdoc:
-            cdetype = b'PDOC'
+            cdetype = b'EBOK'
 
         shutil.copyfile(infile, outfile)
         f = open(outfile, "r+b")
