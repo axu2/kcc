@@ -707,7 +707,7 @@ def imgFileProcessing(work):
                 pass
             elif opt.forcepng:
                 img.convertToGrayscale()
-                if opt.format != 'PDF':
+                if False:
                     img.quantizeImage()
             else:
                 img.convertToGrayscale()
