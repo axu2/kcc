@@ -104,7 +104,7 @@ def splitImage(work):
         opt = work[2]
         filePath = os.path.join(path, name)
         Image.warnings.simplefilter('error', Image.DecompressionBombWarning)
-        Image.MAX_IMAGE_PIXELS = 1000000000
+        Image.MAX_IMAGE_PIXELS = 1200000000
         imgOrg = Image.open(filePath).convert('RGB')
         # I experimented with custom vertical edge kernel [-1, 2, -1] but got poor results
         imgEdges = Image.open(filePath).convert('L').filter(ImageFilter.FIND_EDGES)
