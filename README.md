@@ -22,7 +22,7 @@ Supported input formats include JPG/PNG image files in folders, archives like CB
 Supported output formats include MOBI/AZW3, EPUB, KEPUB, CBZ, and PDF.
 
 The absolute highest quality source files are DRM-free PDFs from [Humble Bundle](https://humblebundleinc.sjv.io/xL6Zv1)/Fanatical.
-The PDFs are often x12000 resolution or better, basically print quality.
+The PDFs are often x12000 resolution or better, while even the 10" Kindle Scribe is only x2480.
 
 KCC's main goal is maximum image quality at significantly smaller file size. For example, KCC
 
