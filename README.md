@@ -183,7 +183,11 @@ You'll need to install various tools to access important but optional features. 
 
 ### KindleGen
 
-On Windows and macOS, install [Kindle Previewer](https://www.amazon.com/Kindle-Previewer/b?ie=UTF8&node=21381691011) and `kindlegen` will be autodetected from it.
+On Windows and macOS, install Kindle Previewer and `kindlegen` will be autodetected from it.
+
+> [!WARNING]
+> On Sept 14, 2026, Kindle Previewer was updated to version 4, which made kindlegen harder to use.
+> In the meantime, please download the older version 3: https://web.archive.org/web/20260819184257/https://kdp.amazon.com/en_US/help/topic/G202131170
 
 If you have issues detecting it, get stuck on the MOBI conversion step, or use Linux AppImage or Flatpak, refer to the wiki: https://github.com/ciromattia/kcc/wiki/Installation#kindlegen
 
