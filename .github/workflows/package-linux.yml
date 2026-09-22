@@ -41,21 +41,27 @@ jobs:
       run: |
         python setup.py build_binary
         chmod +x dist/kcc_linux*
-#    issue with this action, disabled and commented out
-#        see https://github.com/AppImageCrafters/build-appimage/issues/5
-#        see https://appimage-builder.readthedocs.io/en/latest/intro/install.html#install-appimagetool
-#    - name: Build AppImage
-#      uses: AppImageCrafters/build-appimage-action@master
-#      env:
-#        UPDATE_INFO: gh-releases-zsync|ciromattia|kcc|latest|*x86_64.AppImage.zsync
-#      with:
-#        recipe: AppImageBuilder.yml
     - name: Build AppImage
       run: |
-        wget -O appimage-builder-x86_64.AppImage https://github.com/AppImageCrafters/appimage-builder/releases/download/v1.1.0/appimage-builder-1.1.0-x86_64.AppImage
-        chmod +x appimage-builder-x86_64.AppImage
-        sudo mv appimage-builder-x86_64.AppImage /usr/local/bin/appimage-builder
-        appimage-builder --recipe AppImageBuilder.yml --skip-test
+        set -eux
+        ARCH="$(uname -m)"
+        SHARUN="https://raw.githubusercontent.com/pkgforge-dev/Anylinux-AppImages/refs/heads/main/useful-tools/quick-sharun.sh"
+
+        # Configure the AppImage
+        export ICON=icons/comic2ebook.png
+        export DESKTOP=/usr/share/applications/kcc_linux.desktop
+        export OUTPATH=./dist
+        export OUTNAME=kcc_linux-"$ARCH".AppImage
+
+        # Download and run quick-sharun
+        wget "$SHARUN" -O ./quick-sharun
+        chmod +x ./quick-sharun
+
+        # Bundle the application
+        ./quick-sharun /usr/bin/myapp
+
+        # Create the AppImage
+        ./quick-sharun --make-appimage
       env:
         UPDATE_INFO: gh-releases-zsync|ciromattia|kcc|latest|*x86_64.AppImage.zsync
     - name: upload artifact
