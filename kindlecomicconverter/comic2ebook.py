@@ -753,7 +753,13 @@ def imgFileProcessing(work):
             if not img.colorOutput:
                 img.convertToGrayscale()
 
-            img.autocontrastImage()
+            hist = img.image.histogram()
+            darkness = hist[:64]
+            total = sum(darkness) or 1
+            black_point = darkness.index(max(darkness))
+            if (hist[black_point] - hist[black_point + 2]) / total > .3:
+                img.autocontrastImage()
+
             img.resizeImage()
             img.optimizeForDisplay(opt.eraserainbow, img.colorOutput)
 
