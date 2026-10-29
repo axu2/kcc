@@ -482,8 +482,8 @@ class ComicPage:
                 flags.append('BlackBackground')
             if self.opt.kindle_scribe_azw3 and self.image.size[1] > 1920:
                 w, h = self.image.size
-                targetPath = self.save_with_codec(self.image.crop((0, 0, w, 1920)), self.targetPathStart + self.targetPathOrder + '-above')
-                self.save_with_codec(self.image.crop((0, 1920, w, h)), self.targetPathStart + self.targetPathOrder + '-below')
+                targetPath = self.save_with_codec(self.image.crop((0, 0, w, h // 2)), self.targetPathStart + self.targetPathOrder + '-above')
+                self.save_with_codec(self.image.crop((0, h // 2, w, h)), self.targetPathStart + self.targetPathOrder + '-below')
             elif self.opt.kindle_scribe_azw3:
                 targetPath = self.save_with_codec(self.image, self.targetPathStart + self.targetPathOrder + '-whole')
             else:
